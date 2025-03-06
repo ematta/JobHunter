@@ -15,7 +15,9 @@ jobs:
           swift-version: 5.7
       
       - name: Run tests
-        run: cd ${GITHUB_WORKSPACE} && make test
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          make test
 
   build:
     needs: test
@@ -27,13 +29,22 @@ jobs:
       - name: Set up Swift
         uses: swift-actions/setup-swift@v1
         with:
-          swift-version: '5.7'
+          swift-version: 5.7
           
       - name: Build application
-        run: cd ${GITHUB_WORKSPACE} && make app
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          make build
+
+      - name: Create app bundle
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          make app
 
       - name: Archive app
-        run: cd ${GITHUB_WORKSPACE} && zip -r JobHunter.zip JobHunter.app
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          zip -r JobHunter.zip JobHunter.app
           
       - name: Upload artifact
         uses: actions/upload-artifact@v3
