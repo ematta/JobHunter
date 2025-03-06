@@ -12,11 +12,10 @@ jobs:
       - name: Set up Swift
         uses: swift-actions/setup-swift@v1
         with:
-          swift-version: '5.7'
+          swift-version: ''
           
       - name: Run tests
-        working-directory: JobHunter
-        run: make test
+        run: cd ${GITHUB_WORKSPACE} && make test
 
   build:
     needs: test
@@ -28,22 +27,19 @@ jobs:
       - name: Set up Swift
         uses: swift-actions/setup-swift@v1
         with:
-          swift-version: '5.7'
+          swift-version: '6.0'
           
       - name: Build application
-        working-directory: JobHunter
-        run: make app
+        run: cd ${GITHUB_WORKSPACE} && make app
 
       - name: Archive app
-        working-directory: JobHunter
-        run: |
-          zip -r JobHunter.zip JobHunter.app
+        run: cd ${GITHUB_WORKSPACE} && zip -r JobHunter.zip JobHunter.app
           
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
           name: JobHunter-app
-          path: JobHunter/JobHunter.zip
+          path: JobHunter.zip
 
   release:
     needs: build
