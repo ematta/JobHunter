@@ -17,7 +17,7 @@ jobs:
       - name: Run tests
         run: |
           cd ${GITHUB_WORKSPACE}
-          make test
+          swift test --package-path .
 
   build:
     needs: test
@@ -34,7 +34,7 @@ jobs:
       - name: Build application
         run: |
           cd ${GITHUB_WORKSPACE}
-          make build
+          swift build --package-path .
 
       - name: Create app bundle
         run: |
