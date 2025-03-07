@@ -78,8 +78,13 @@ class MainViewController: NSViewController {
         splitView.addArrangedSubview(leftPanel)
         splitView.addArrangedSubview(rightPanel)
         
-        // Set up initial positions
+        // Set up split view position and hold positions
         splitView.setPosition(300, ofDividerAt: 0)
+        
+        // Prevent the left panel from resizing
+        if let leftSplitViewItem = splitView.subviews.first {
+            splitView.setHoldingPriority(NSLayoutConstraint.Priority(250), forSubviewAt: 0)
+        }
     }
     
     /**
@@ -145,15 +150,15 @@ class MainViewController: NSViewController {
         scrollView.documentView = jobsTableView
         panel.addSubview(scrollView)
         
-        // Create buttons for adding and removing jobs
-        let addButton = NSButton(frame: NSRect(x: 10, y: 10, width: 100, height: 30))
+        // Create buttons for adding and removing jobs - make them 10px bigger
+        let addButton = NSButton(frame: NSRect(x: 10, y: 10, width: 110, height: 40))
         addButton.title = "Add Job"
         addButton.bezelStyle = .rounded
         addButton.target = self
         addButton.action = #selector(addJob(_:))
         panel.addSubview(addButton)
         
-        let removeButton = NSButton(frame: NSRect(x: 120, y: 10, width: 100, height: 30))
+        let removeButton = NSButton(frame: NSRect(x: 130, y: 10, width: 110, height: 40))
         removeButton.title = "Remove Job"
         removeButton.bezelStyle = .rounded
         removeButton.target = self
@@ -171,7 +176,8 @@ class MainViewController: NSViewController {
      * - Returns: The configured right panel view
      */
     private func createRightPanel() -> NSView {
-        let panel = NSView(frame: NSRect(x: 0, y: 0, width: 700, height: view.bounds.height))
+        // Adjust the width to better utilize space
+        let panel = NSView(frame: NSRect(x: 0, y: 0, width: view.bounds.width - 300, height: view.bounds.height))
         
         // Create the job detail view
         jobDetailView = JobDetailView(frame: panel.bounds, databaseManager: databaseManager, iCloudManager: iCloudManager)

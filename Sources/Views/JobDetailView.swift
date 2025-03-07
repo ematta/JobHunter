@@ -82,14 +82,14 @@ class JobDetailView: NSView {
         companyNameLabel.frame = NSRect(x: 0, y: 45, width: 150, height: 20)
         headerTitleView.addSubview(companyNameLabel)
         
-        companyNameTextField = NSTextField(frame: NSRect(x: 150, y: 45, width: headerTitleView.bounds.width - 150, height: 24))
+        companyNameTextField = NSTextField(frame: NSRect(x: 150, y: 45, width: headerTitleView.bounds.width - 170, height: 24))
         headerTitleView.addSubview(companyNameTextField)
         
         let jobTitleLabel = NSTextField(labelWithString: "Job Title:")
         jobTitleLabel.frame = NSRect(x: 0, y: 15, width: 150, height: 20)
         headerTitleView.addSubview(jobTitleLabel)
         
-        jobTitleTextField = NSTextField(frame: NSRect(x: 150, y: 15, width: headerTitleView.bounds.width - 150, height: 24))
+        jobTitleTextField = NSTextField(frame: NSRect(x: 150, y: 15, width: headerTitleView.bounds.width - 170, height: 24))
         headerTitleView.addSubview(jobTitleTextField)
         
         headerView.addSubview(headerTitleView)
@@ -121,7 +121,7 @@ class JobDetailView: NSView {
         // Add Save Button
         let saveButton = NSButton(title: "Save Changes", target: self, action: #selector(saveChanges(_:)))
         saveButton.bezelStyle = .rounded
-        saveButton.frame = NSRect(x: bounds.width - 150, y: 10, width: 120, height: 32)
+        saveButton.frame = NSRect(x: bounds.width - 160, y: 10, width: 130, height: 42)
         addSubview(saveButton)
     }
     
@@ -168,7 +168,7 @@ class JobDetailView: NSView {
         contactNameLabel.frame = NSRect(x: 40, y: frame.height - 190, width: 100, height: 20)
         view.addSubview(contactNameLabel)
         
-        contactNameTextField = NSTextField(frame: NSRect(x: 150, y: frame.height - 190, width: 250, height: 24))
+        contactNameTextField = NSTextField(frame: NSRect(x: 180, y: frame.height - 190, width: frame.width - 220, height: 24))
         view.addSubview(contactNameTextField)
         
         // Contact Email
@@ -176,7 +176,7 @@ class JobDetailView: NSView {
         contactEmailLabel.frame = NSRect(x: 40, y: frame.height - 220, width: 100, height: 20)
         view.addSubview(contactEmailLabel)
         
-        contactEmailTextField = NSTextField(frame: NSRect(x: 150, y: frame.height - 220, width: 250, height: 24))
+        contactEmailTextField = NSTextField(frame: NSRect(x: 180, y: frame.height - 220, width: frame.width - 220, height: 24))
         view.addSubview(contactEmailTextField)
         
         // Contact Phone
@@ -184,7 +184,7 @@ class JobDetailView: NSView {
         contactPhoneLabel.frame = NSRect(x: 40, y: frame.height - 250, width: 100, height: 20)
         view.addSubview(contactPhoneLabel)
         
-        contactPhoneTextField = NSTextField(frame: NSRect(x: 150, y: frame.height - 250, width: 250, height: 24))
+        contactPhoneTextField = NSTextField(frame: NSRect(x: 180, y: frame.height - 250, width: frame.width - 220, height: 24))
         view.addSubview(contactPhoneTextField)
         
         // Job Description
@@ -241,20 +241,20 @@ class JobDetailView: NSView {
         scrollView.documentView = attachmentsTableView
         view.addSubview(scrollView)
         
-        // Buttons for attachments
+        // Buttons for attachments - make 10px bigger and ensure proper spacing
         addAttachmentButton = NSButton(title: "Add Document", target: self, action: #selector(addAttachment(_:)))
         addAttachmentButton.bezelStyle = .rounded
-        addAttachmentButton.frame = NSRect(x: 20, y: 20, width: 120, height: 32)
+        addAttachmentButton.frame = NSRect(x: 20, y: 20, width: 130, height: 42)
         view.addSubview(addAttachmentButton)
         
         removeAttachmentButton = NSButton(title: "Remove", target: self, action: #selector(removeAttachment(_:)))
         removeAttachmentButton.bezelStyle = .rounded
-        removeAttachmentButton.frame = NSRect(x: 150, y: 20, width: 80, height: 32)
+        removeAttachmentButton.frame = NSRect(x: 170, y: 20, width: 90, height: 42)
         view.addSubview(removeAttachmentButton)
         
         let openButton = NSButton(title: "Open", target: self, action: #selector(openAttachment(_:)))
         openButton.bezelStyle = .rounded
-        openButton.frame = NSRect(x: 240, y: 20, width: 80, height: 32)
+        openButton.frame = NSRect(x: 280, y: 20, width: 90, height: 42)
         view.addSubview(openButton)
         
         return view
@@ -292,7 +292,7 @@ class JobDetailView: NSView {
         // Update UI with job data
         companyNameTextField.stringValue = jobApplication.companyName
         jobTitleTextField.stringValue = jobApplication.jobTitle
-        applicationDatePicker.dateValue = Date() // Set to current date
+        applicationDatePicker.dateValue = jobApplication.applicationDate
         deadlineDatePicker.dateValue = jobApplication.applicationDeadline
         
         // Set status
