@@ -100,6 +100,8 @@ class MainViewController: NSViewController {
      */
     private func createLeftPanel() -> NSView {
         let panel = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: view.bounds.height))
+        panel.wantsLayer = true
+        panel.layer?.backgroundColor = NSColor.darkGray.cgColor
         
         // Create the search field
         searchField = NSSearchField(frame: NSRect(x: 10, y: panel.bounds.height - 40, width: panel.bounds.width - 20, height: 30))
@@ -109,21 +111,7 @@ class MainViewController: NSViewController {
         searchField.autoresizingMask = [.width, .minYMargin]
         panel.addSubview(searchField)
         
-        // Create the status filter
-        statusSegmentedControl = NSSegmentedControl(frame: NSRect(x: 10, y: panel.bounds.height - 80, width: panel.bounds.width - 20, height: 30))
-        statusSegmentedControl.segmentCount = 5
-        statusSegmentedControl.setLabel("All", forSegment: 0)
-        statusSegmentedControl.setLabel("Applied", forSegment: 1)
-        statusSegmentedControl.setLabel("Interviewing", forSegment: 2)
-        statusSegmentedControl.setLabel("Offered", forSegment: 3)
-        statusSegmentedControl.setLabel("Rejected", forSegment: 4)
-        statusSegmentedControl.selectedSegment = 0
-        statusSegmentedControl.target = self
-        statusSegmentedControl.action = #selector(statusFilterChanged(_:))
-        statusSegmentedControl.autoresizingMask = [.width, .minYMargin]
-        panel.addSubview(statusSegmentedControl)
-        
-        // Create the table view
+        // Create the table view - simplify to just display company names
         let scrollView = NSScrollView(frame: NSRect(x: 0, y: 50, width: panel.bounds.width, height: panel.bounds.height - 90))
         scrollView.autoresizingMask = [.width, .height]
         scrollView.hasVerticalScroller = true
@@ -131,18 +119,13 @@ class MainViewController: NSViewController {
         
         jobsTableView = NSTableView(frame: NSRect(x: 0, y: 0, width: scrollView.contentSize.width, height: scrollView.contentSize.height))
         jobsTableView.autoresizingMask = [.width, .height]
+        jobsTableView.backgroundColor = NSColor.darkGray
         
-        // Create company column
+        // Create company column - single column for simplified view
         let companyColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("companyColumn"))
         companyColumn.title = "Company"
-        companyColumn.width = 150
+        companyColumn.width = scrollView.contentSize.width - 20
         jobsTableView.addTableColumn(companyColumn)
-        
-        // Create job title column
-        let jobTitleColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("jobTitleColumn"))
-        jobTitleColumn.title = "Job Title"
-        jobTitleColumn.width = 150
-        jobsTableView.addTableColumn(jobTitleColumn)
         
         jobsTableView.delegate = self
         jobsTableView.dataSource = self
@@ -150,15 +133,15 @@ class MainViewController: NSViewController {
         scrollView.documentView = jobsTableView
         panel.addSubview(scrollView)
         
-        // Create buttons for adding and removing jobs - make them 10px bigger
-        let addButton = NSButton(frame: NSRect(x: 10, y: 10, width: 110, height: 40))
+        // Create buttons for adding and removing jobs
+        let addButton = NSButton(frame: NSRect(x: 10, y: 10, width: 100, height: 30))
         addButton.title = "Add Job"
         addButton.bezelStyle = .rounded
         addButton.target = self
         addButton.action = #selector(addJob(_:))
         panel.addSubview(addButton)
         
-        let removeButton = NSButton(frame: NSRect(x: 130, y: 10, width: 110, height: 40))
+        let removeButton = NSButton(frame: NSRect(x: 120, y: 10, width: 100, height: 30))
         removeButton.title = "Remove Job"
         removeButton.bezelStyle = .rounded
         removeButton.target = self
@@ -178,6 +161,8 @@ class MainViewController: NSViewController {
     private func createRightPanel() -> NSView {
         // Adjust the width to better utilize space
         let panel = NSView(frame: NSRect(x: 0, y: 0, width: view.bounds.width - 300, height: view.bounds.height))
+        panel.wantsLayer = true
+        panel.layer?.backgroundColor = NSColor.darkGray.cgColor
         
         // Create the job detail view
         jobDetailView = JobDetailView(frame: panel.bounds, databaseManager: databaseManager, iCloudManager: iCloudManager)
@@ -199,13 +184,26 @@ class MainViewController: NSViewController {
     private func loadJobApplications() {
         do {
             jobApplications = try databaseManager.getAllJobApplications()
+            
+            // Apply current filter
             filteredJobApplications = jobApplications
+            
+            // Apply search filter if search text is not empty
+            let searchText = searchField.stringValue
+            if !searchText.isEmpty {
+                filteredJobApplications = filteredJobApplications.filter { job in
+                    job.companyName.lowercased().contains(searchText.lowercased()) ||
+                    job.jobTitle.lowercased().contains(searchText.lowercased())
+                }
+            }
+            
             jobsTableView.reloadData()
             
+            // Select the first job if available
             if let firstJob = filteredJobApplications.first {
                 let indexSet = IndexSet(integer: 0)
                 jobsTableView.selectRowIndexes(indexSet, byExtendingSelection: false)
-                jobDetailView.displayJobApplication(firstJob)
+                jobDetailView.display(jobApplication: firstJob)
             }
         } catch {
             print("Failed to load job applications: \(error)")
@@ -311,6 +309,45 @@ class MainViewController: NSViewController {
         }
     }
     
+    /**
+     * Called when a notification about a job application being updated is received.
+     *
+     * This method reloads the job applications and maintains the current selection.
+     */
+    @objc private func jobApplicationUpdated(_ notification: Notification) {
+        let selectedRow = jobsTableView.selectedRow
+        let selectedJobId = selectedRow >= 0 && selectedRow < filteredJobApplications.count ? filteredJobApplications[selectedRow].id : -1
+        
+        loadJobApplications()
+        
+        // Restore selection if possible
+        if selectedJobId != -1 {
+            for (index, job) in filteredJobApplications.enumerated() {
+                if job.id == selectedJobId {
+                    jobsTableView.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
+                    jobDetailView.display(jobApplication: job)
+                    break
+                }
+            }
+        }
+    }
+    
+    /**
+     * Called when the user selects a job in the table view.
+     *
+     * This method loads the selected job into the detail view.
+     */
+    func tableViewSelectionDidChange(_ notification: Notification) {
+        let selectedRow = jobsTableView.selectedRow
+        
+        if selectedRow >= 0 && selectedRow < filteredJobApplications.count {
+            let selectedJob = filteredJobApplications[selectedRow]
+            jobDetailView.display(jobApplication: selectedJob)
+        } else {
+            jobDetailView.display(jobApplication: nil)
+        }
+    }
+    
     // MARK: - Helpers
     
     private func showAlert(title: String, message: String) {
@@ -352,41 +389,34 @@ extension MainViewController: NSTableViewDelegate, NSTableViewDataSource {
         
         if identifier.rawValue == "companyColumn" {
             textField.stringValue = job.companyName
-        } else if identifier.rawValue == "jobTitleColumn" {
-            textField.stringValue = job.jobTitle
         }
         
         return cell
-    }
-    
-    func tableViewSelectionDidChange(_ notification: Notification) {
-        let selectedRow = jobsTableView.selectedRow
-        if selectedRow >= 0 && selectedRow < filteredJobApplications.count {
-            let selectedJob = filteredJobApplications[selectedRow]
-            jobDetailView.displayJobApplication(selectedJob)
-        }
     }
 }
 
 // MARK: - JobDetailViewDelegate
 
 extension MainViewController: JobDetailViewDelegate {
+    /**
+     * Called when a job application is updated in the detail view.
+     *
+     * This method updates the job in the database and reloads the list.
+     */
     func jobDetailViewDidUpdate(_ jobApplication: JobApplication) {
-        // Update the job application in the database
         do {
             try databaseManager.updateJobApplication(jobApplication)
-            
-            // Reload all job applications
             loadJobApplications()
             
-            // Select the updated job in the table view
-            if let index = filteredJobApplications.firstIndex(where: { $0.id == jobApplication.id }) {
-                let indexSet = IndexSet(integer: index)
-                jobsTableView.selectRowIndexes(indexSet, byExtendingSelection: false)
+            // Restore selection
+            for (index, job) in filteredJobApplications.enumerated() {
+                if job.id == jobApplication.id {
+                    jobsTableView.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
+                    break
+                }
             }
         } catch {
             print("Failed to update job application: \(error)")
-            showAlert(title: "Error", message: "Failed to update job application: \(error.localizedDescription)")
         }
     }
 } 

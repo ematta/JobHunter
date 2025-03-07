@@ -29,18 +29,18 @@ class JobDetailView: NSView {
     
     // UI Components
     private var companyNameTextField: NSTextField!
-    private var jobTitleTextField: NSTextField!
     private var applicationDatePicker: NSDatePicker!
     private var deadlineDatePicker: NSDatePicker!
     private var statusPopUpButton: NSPopUpButton!
     private var jobDescriptionTextView: NSTextView!
-    private var notesTextView: NSTextView!
     private var contactNameTextField: NSTextField!
     private var contactEmailTextField: NSTextField!
     private var contactPhoneTextField: NSTextField!
-    private var attachmentsTableView: NSTableView!
-    private var addAttachmentButton: NSButton!
-    private var removeAttachmentButton: NSButton!
+    private var saveButton: NSButton!
+    private var editModeCheckbox: NSButton! // New checkbox for edit mode
+    
+    // Edit mode flag
+    private var isEditMode: Bool = false
     
     /**
      * Initializes a new JobDetailView with the specified frame and dependencies.
@@ -64,441 +64,273 @@ class JobDetailView: NSView {
     /**
      * Sets up the user interface components for the job detail view.
      *
-     * This method creates and configures all the UI elements including text fields,
-     * date pickers, dropdown menus, text views, and buttons.
+     * This method creates and configures all the UI elements to match the dark-themed UI shown in the screenshot.
      */
     private func setupUI() {
         wantsLayer = true
+        layer?.backgroundColor = NSColor.darkGray.cgColor
         
-        // Header
-        let headerView = NSView(frame: NSRect(x: 0, y: bounds.height - 80, width: bounds.width, height: 80))
-        headerView.wantsLayer = true
-        headerView.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+        // Increase overall UI size - make the content width larger
+        let contentWidth: CGFloat = bounds.width - 40 // 20px padding on each side
+        let mainColumn = NSView(frame: NSRect(x: 20, y: 20, width: contentWidth, height: bounds.height - 40))
+        mainColumn.wantsLayer = true
         
-        // Company and Job Title
-        let headerTitleView = NSView(frame: NSRect(x: 20, y: 0, width: headerView.bounds.width - 40, height: headerView.bounds.height))
+        // Starting Y position (from top) - moved higher to accommodate larger UI
+        var currentY: CGFloat = bounds.height - 120
+        let labelWidth: CGFloat = 180
+        let fieldWidth: CGFloat = 350
+        let fieldHeight: CGFloat = 30
+        let verticalSpacing: CGFloat = 40
         
-        let companyNameLabel = NSTextField(labelWithString: "Company Name:")
-        companyNameLabel.frame = NSRect(x: 0, y: 45, width: 150, height: 20)
-        headerTitleView.addSubview(companyNameLabel)
+        // Edit Mode Checkbox
+        editModeCheckbox = NSButton(checkboxWithTitle: "Enable Editing", target: self, action: #selector(toggleEditMode))
+        editModeCheckbox.frame = NSRect(x: contentWidth - 150, y: bounds.height - 70, width: 150, height: 30)
+        editModeCheckbox.state = .off
+        mainColumn.addSubview(editModeCheckbox)
         
-        companyNameTextField = NSTextField(frame: NSRect(x: 150, y: 45, width: headerTitleView.bounds.width - 170, height: 24))
-        headerTitleView.addSubview(companyNameTextField)
+        // Company Name
+        let companyLabel = NSTextField(labelWithString: "Company:")
+        companyLabel.frame = NSRect(x: 0, y: currentY, width: labelWidth, height: 24)
+        companyLabel.textColor = NSColor.white
+        companyLabel.font = NSFont.systemFont(ofSize: 16)
+        mainColumn.addSubview(companyLabel)
         
-        let jobTitleLabel = NSTextField(labelWithString: "Job Title:")
-        jobTitleLabel.frame = NSRect(x: 0, y: 15, width: 150, height: 20)
-        headerTitleView.addSubview(jobTitleLabel)
+        companyNameTextField = NSTextField(frame: NSRect(x: labelWidth, y: currentY, width: fieldWidth, height: fieldHeight))
+        companyNameTextField.font = NSFont.systemFont(ofSize: 16)
+        companyNameTextField.isEditable = false
+        mainColumn.addSubview(companyNameTextField)
         
-        jobTitleTextField = NSTextField(frame: NSRect(x: 150, y: 15, width: headerTitleView.bounds.width - 170, height: 24))
-        headerTitleView.addSubview(jobTitleTextField)
-        
-        headerView.addSubview(headerTitleView)
-        addSubview(headerView)
-        
-        // Main Content (using Tab View)
-        let tabView = NSTabView(frame: NSRect(x: 0, y: 0, width: bounds.width, height: bounds.height - 80))
-        
-        // Details Tab
-        let detailsTab = NSTabViewItem(identifier: "details")
-        detailsTab.label = "Details"
-        detailsTab.view = createDetailsView(frame: NSRect(x: 0, y: 0, width: tabView.bounds.width, height: tabView.bounds.height - 20))
-        tabView.addTabViewItem(detailsTab)
-        
-        // Attachments Tab
-        let attachmentsTab = NSTabViewItem(identifier: "attachments")
-        attachmentsTab.label = "Attachments"
-        attachmentsTab.view = createAttachmentsView(frame: NSRect(x: 0, y: 0, width: tabView.bounds.width, height: tabView.bounds.height - 20))
-        tabView.addTabViewItem(attachmentsTab)
-        
-        // Notes Tab
-        let notesTab = NSTabViewItem(identifier: "notes")
-        notesTab.label = "Notes"
-        notesTab.view = createNotesView(frame: NSRect(x: 0, y: 0, width: tabView.bounds.width, height: tabView.bounds.height - 20))
-        tabView.addTabViewItem(notesTab)
-        
-        addSubview(tabView)
-        
-        // Add Save Button
-        let saveButton = NSButton(title: "Save Changes", target: self, action: #selector(saveChanges(_:)))
-        saveButton.bezelStyle = .rounded
-        saveButton.frame = NSRect(x: bounds.width - 160, y: 10, width: 130, height: 42)
-        addSubview(saveButton)
-    }
-    
-    private func createDetailsView(frame: NSRect) -> NSView {
-        let view = NSView(frame: frame)
+        currentY -= verticalSpacing
         
         // Application Date
-        let applicationDateLabel = NSTextField(labelWithString: "Application Date:")
-        applicationDateLabel.frame = NSRect(x: 20, y: frame.height - 40, width: 150, height: 20)
-        view.addSubview(applicationDateLabel)
+        let appDateLabel = NSTextField(labelWithString: "Application Date:")
+        appDateLabel.frame = NSRect(x: 0, y: currentY, width: labelWidth, height: 24)
+        appDateLabel.textColor = NSColor.white
+        appDateLabel.font = NSFont.systemFont(ofSize: 16)
+        mainColumn.addSubview(appDateLabel)
         
-        applicationDatePicker = NSDatePicker(frame: NSRect(x: 180, y: frame.height - 40, width: 200, height: 24))
+        applicationDatePicker = NSDatePicker(frame: NSRect(x: labelWidth, y: currentY, width: fieldWidth, height: fieldHeight))
         applicationDatePicker.datePickerStyle = .textField
-        applicationDatePicker.datePickerElements = [.yearMonth, .yearMonthDay]
-        view.addSubview(applicationDatePicker)
+        applicationDatePicker.datePickerElements = .yearMonthDay
+        applicationDatePicker.font = NSFont.systemFont(ofSize: 16)
+        applicationDatePicker.isEnabled = false
+        mainColumn.addSubview(applicationDatePicker)
+        
+        currentY -= verticalSpacing
         
         // Deadline Date
-        let deadlineDateLabel = NSTextField(labelWithString: "Deadline Date:")
-        deadlineDateLabel.frame = NSRect(x: 20, y: frame.height - 80, width: 150, height: 20)
-        view.addSubview(deadlineDateLabel)
+        let deadlineLabel = NSTextField(labelWithString: "Deadline Date:")
+        deadlineLabel.frame = NSRect(x: 0, y: currentY, width: labelWidth, height: 24)
+        deadlineLabel.textColor = NSColor.white
+        deadlineLabel.font = NSFont.systemFont(ofSize: 16)
+        mainColumn.addSubview(deadlineLabel)
         
-        deadlineDatePicker = NSDatePicker(frame: NSRect(x: 180, y: frame.height - 80, width: 200, height: 24))
+        deadlineDatePicker = NSDatePicker(frame: NSRect(x: labelWidth, y: currentY, width: fieldWidth, height: fieldHeight))
         deadlineDatePicker.datePickerStyle = .textField
-        deadlineDatePicker.datePickerElements = [.yearMonth, .yearMonthDay]
-        view.addSubview(deadlineDatePicker)
+        deadlineDatePicker.datePickerElements = .yearMonthDay
+        deadlineDatePicker.font = NSFont.systemFont(ofSize: 16)
+        deadlineDatePicker.isEnabled = false
+        mainColumn.addSubview(deadlineDatePicker)
+        
+        currentY -= verticalSpacing
         
         // Status
         let statusLabel = NSTextField(labelWithString: "Status:")
-        statusLabel.frame = NSRect(x: 20, y: frame.height - 120, width: 150, height: 20)
-        view.addSubview(statusLabel)
+        statusLabel.frame = NSRect(x: 0, y: currentY, width: labelWidth, height: 24)
+        statusLabel.textColor = NSColor.white
+        statusLabel.font = NSFont.systemFont(ofSize: 16)
+        mainColumn.addSubview(statusLabel)
         
-        statusPopUpButton = NSPopUpButton(frame: NSRect(x: 180, y: frame.height - 120, width: 200, height: 24))
-        statusPopUpButton.addItems(withTitles: ["Applied", "Interviewing", "Offered", "Rejected"])
-        view.addSubview(statusPopUpButton)
+        statusPopUpButton = NSPopUpButton(frame: NSRect(x: labelWidth, y: currentY, width: fieldWidth, height: fieldHeight))
+        statusPopUpButton.addItems(withTitles: ["Applied", "Interviewing", "Offer", "Rejected", "Accepted"])
+        statusPopUpButton.font = NSFont.systemFont(ofSize: 16)
+        statusPopUpButton.isEnabled = false
+        mainColumn.addSubview(statusPopUpButton)
         
-        // Contact Information
-        let contactInfoLabel = NSTextField(labelWithString: "Contact Information")
-        contactInfoLabel.font = NSFont.boldSystemFont(ofSize: 14)
-        contactInfoLabel.frame = NSRect(x: 20, y: frame.height - 160, width: 200, height: 20)
-        view.addSubview(contactInfoLabel)
+        currentY -= verticalSpacing
         
         // Contact Name
-        let contactNameLabel = NSTextField(labelWithString: "Name:")
-        contactNameLabel.frame = NSRect(x: 40, y: frame.height - 190, width: 100, height: 20)
-        view.addSubview(contactNameLabel)
+        let nameLabel = NSTextField(labelWithString: "Name:")
+        nameLabel.frame = NSRect(x: 0, y: currentY, width: labelWidth, height: 24)
+        nameLabel.textColor = NSColor.white
+        nameLabel.font = NSFont.systemFont(ofSize: 16)
+        mainColumn.addSubview(nameLabel)
         
-        contactNameTextField = NSTextField(frame: NSRect(x: 180, y: frame.height - 190, width: frame.width - 220, height: 24))
-        view.addSubview(contactNameTextField)
+        contactNameTextField = NSTextField(frame: NSRect(x: labelWidth, y: currentY, width: fieldWidth, height: fieldHeight))
+        contactNameTextField.font = NSFont.systemFont(ofSize: 16)
+        contactNameTextField.isEditable = false
+        mainColumn.addSubview(contactNameTextField)
+        
+        currentY -= verticalSpacing
         
         // Contact Email
-        let contactEmailLabel = NSTextField(labelWithString: "Email:")
-        contactEmailLabel.frame = NSRect(x: 40, y: frame.height - 220, width: 100, height: 20)
-        view.addSubview(contactEmailLabel)
+        let emailLabel = NSTextField(labelWithString: "Email:")
+        emailLabel.frame = NSRect(x: 0, y: currentY, width: labelWidth, height: 24)
+        emailLabel.textColor = NSColor.white
+        emailLabel.font = NSFont.systemFont(ofSize: 16)
+        mainColumn.addSubview(emailLabel)
         
-        contactEmailTextField = NSTextField(frame: NSRect(x: 180, y: frame.height - 220, width: frame.width - 220, height: 24))
-        view.addSubview(contactEmailTextField)
+        contactEmailTextField = NSTextField(frame: NSRect(x: labelWidth, y: currentY, width: fieldWidth, height: fieldHeight))
+        contactEmailTextField.font = NSFont.systemFont(ofSize: 16)
+        contactEmailTextField.isEditable = false
+        mainColumn.addSubview(contactEmailTextField)
+        
+        currentY -= verticalSpacing
         
         // Contact Phone
-        let contactPhoneLabel = NSTextField(labelWithString: "Phone:")
-        contactPhoneLabel.frame = NSRect(x: 40, y: frame.height - 250, width: 100, height: 20)
-        view.addSubview(contactPhoneLabel)
+        let phoneLabel = NSTextField(labelWithString: "Phone:")
+        phoneLabel.frame = NSRect(x: 0, y: currentY, width: labelWidth, height: 24)
+        phoneLabel.textColor = NSColor.white
+        phoneLabel.font = NSFont.systemFont(ofSize: 16)
+        mainColumn.addSubview(phoneLabel)
         
-        contactPhoneTextField = NSTextField(frame: NSRect(x: 180, y: frame.height - 250, width: frame.width - 220, height: 24))
-        view.addSubview(contactPhoneTextField)
+        contactPhoneTextField = NSTextField(frame: NSRect(x: labelWidth, y: currentY, width: fieldWidth, height: fieldHeight))
+        contactPhoneTextField.font = NSFont.systemFont(ofSize: 16)
+        contactPhoneTextField.isEditable = false
+        mainColumn.addSubview(contactPhoneTextField)
+        
+        currentY -= verticalSpacing
         
         // Job Description
-        let jobDescriptionLabel = NSTextField(labelWithString: "Job Description:")
-        jobDescriptionLabel.frame = NSRect(x: 20, y: frame.height - 290, width: 150, height: 20)
-        view.addSubview(jobDescriptionLabel)
+        let jobDescLabel = NSTextField(labelWithString: "Job Description:")
+        jobDescLabel.frame = NSRect(x: 0, y: currentY, width: labelWidth, height: 24)
+        jobDescLabel.textColor = NSColor.white
+        jobDescLabel.font = NSFont.systemFont(ofSize: 16)
+        mainColumn.addSubview(jobDescLabel)
         
-        let jobDescriptionScrollView = NSScrollView(frame: NSRect(x: 20, y: 20, width: frame.width - 40, height: frame.height - 330))
-        jobDescriptionScrollView.hasVerticalScroller = true
-        jobDescriptionScrollView.borderType = .bezelBorder
+        currentY -= 20 // Add a smaller gap for the text view
         
-        jobDescriptionTextView = NSTextView(frame: NSRect(x: 0, y: 0, width: jobDescriptionScrollView.contentSize.width, height: jobDescriptionScrollView.contentSize.height))
-        jobDescriptionTextView.font = NSFont.systemFont(ofSize: 13)
-        jobDescriptionTextView.autoresizingMask = [.width, .height]
-        jobDescriptionTextView.isEditable = true
-        jobDescriptionTextView.isSelectable = true
-        
-        jobDescriptionScrollView.documentView = jobDescriptionTextView
-        view.addSubview(jobDescriptionScrollView)
-        
-        return view
-    }
-    
-    private func createAttachmentsView(frame: NSRect) -> NSView {
-        let view = NSView(frame: frame)
-        
-        // Instructions Label
-        let instructionsLabel = NSTextField(labelWithString: "Attach resumes, cover letters, and other documents related to this job application.")
-        instructionsLabel.frame = NSRect(x: 20, y: frame.height - 40, width: frame.width - 40, height: 20)
-        view.addSubview(instructionsLabel)
-        
-        // Create the table view
-        let scrollView = NSScrollView(frame: NSRect(x: 20, y: 60, width: frame.width - 40, height: frame.height - 120))
+        let scrollViewHeight: CGFloat = 250 // Increased height for description box
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: currentY - scrollViewHeight, width: contentWidth, height: scrollViewHeight))
         scrollView.hasVerticalScroller = true
         scrollView.borderType = .bezelBorder
         
-        attachmentsTableView = NSTableView(frame: NSRect(x: 0, y: 0, width: scrollView.contentSize.width, height: scrollView.contentSize.height))
+        jobDescriptionTextView = NSTextView(frame: NSRect(x: 0, y: 0, width: scrollView.contentSize.width, height: scrollView.contentSize.height))
+        jobDescriptionTextView.font = NSFont.systemFont(ofSize: 14)
+        jobDescriptionTextView.isEditable = false
+        jobDescriptionTextView.textContainerInset = NSSize(width: 5, height: 5)
+        jobDescriptionTextView.backgroundColor = NSColor.darkGray.withAlphaComponent(0.8)
+        jobDescriptionTextView.textColor = NSColor.white
         
-        // Create filename column
-        let filenameColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("filenameColumn"))
-        filenameColumn.title = "Filename"
-        filenameColumn.width = scrollView.contentSize.width - 100
-        attachmentsTableView.addTableColumn(filenameColumn)
+        scrollView.documentView = jobDescriptionTextView
+        mainColumn.addSubview(scrollView)
         
-        // Create type column
-        let typeColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("typeColumn"))
-        typeColumn.title = "Type"
-        typeColumn.width = 80
-        attachmentsTableView.addTableColumn(typeColumn)
+        // Save Button - moved to bottom right
+        saveButton = NSButton(frame: NSRect(x: contentWidth - 120, y: 20, width: 100, height: 34))
+        saveButton.title = "Save"
+        saveButton.bezelStyle = .rounded
+        saveButton.target = self
+        saveButton.action = #selector(saveChanges)
+        saveButton.isEnabled = false // Disabled by default since we're in readonly mode
+        mainColumn.addSubview(saveButton)
         
-        attachmentsTableView.delegate = self
-        attachmentsTableView.dataSource = self
+        // Add main column to view
+        addSubview(mainColumn)
         
-        scrollView.documentView = attachmentsTableView
-        view.addSubview(scrollView)
-        
-        // Buttons for attachments - make 10px bigger and ensure proper spacing
-        addAttachmentButton = NSButton(title: "Add Document", target: self, action: #selector(addAttachment(_:)))
-        addAttachmentButton.bezelStyle = .rounded
-        addAttachmentButton.frame = NSRect(x: 20, y: 20, width: 130, height: 42)
-        view.addSubview(addAttachmentButton)
-        
-        removeAttachmentButton = NSButton(title: "Remove", target: self, action: #selector(removeAttachment(_:)))
-        removeAttachmentButton.bezelStyle = .rounded
-        removeAttachmentButton.frame = NSRect(x: 170, y: 20, width: 90, height: 42)
-        view.addSubview(removeAttachmentButton)
-        
-        let openButton = NSButton(title: "Open", target: self, action: #selector(openAttachment(_:)))
-        openButton.bezelStyle = .rounded
-        openButton.frame = NSRect(x: 280, y: 20, width: 90, height: 42)
-        view.addSubview(openButton)
-        
-        return view
+        // Start with fields filled and readonly
+        populateDefaultValues()
     }
     
-    private func createNotesView(frame: NSRect) -> NSView {
-        let view = NSView(frame: frame)
+    /**
+     * Populates the form with default values.
+     */
+    private func populateDefaultValues() {
+        companyNameTextField.stringValue = "test"
+        applicationDatePicker.dateValue = Date()
         
-        // Notes
-        let notesLabel = NSTextField(labelWithString: "Notes:")
-        notesLabel.frame = NSRect(x: 20, y: frame.height - 40, width: 150, height: 20)
-        view.addSubview(notesLabel)
+        // Set deadline to 1 week from now
+        deadlineDatePicker.dateValue = Date().addingTimeInterval(60 * 60 * 24 * 7)
         
-        let notesScrollView = NSScrollView(frame: NSRect(x: 20, y: 20, width: frame.width - 40, height: frame.height - 80))
-        notesScrollView.hasVerticalScroller = true
-        notesScrollView.borderType = .bezelBorder
-        
-        notesTextView = NSTextView(frame: NSRect(x: 0, y: 0, width: notesScrollView.contentSize.width, height: notesScrollView.contentSize.height))
-        notesTextView.font = NSFont.systemFont(ofSize: 13)
-        notesTextView.autoresizingMask = [.width, .height]
-        notesTextView.isEditable = true
-        notesTextView.isSelectable = true
-        
-        notesScrollView.documentView = notesTextView
-        view.addSubview(notesScrollView)
-        
-        return view
+        statusPopUpButton.selectItem(at: 0) // Applied
+        jobDescriptionTextView.string = "Enter the job description here. Include details about responsibilities, requirements, and any other relevant information about the position."
+        contactNameTextField.stringValue = "test"
+        contactEmailTextField.stringValue = "test"
+        contactPhoneTextField.stringValue = "3333333333"
     }
     
-    // MARK: - Public Methods
+    /**
+     * Toggles edit mode on/off based on the checkbox state.
+     */
+    @objc private func toggleEditMode(_ sender: NSButton) {
+        isEditMode = (sender.state == .on)
+        setFieldsEnabled(isEditMode)
+    }
     
-    func displayJobApplication(_ jobApplication: JobApplication) {
+    /**
+     * Enables or disables all input fields in the view.
+     *
+     * - Parameter enabled: Whether the fields should be enabled
+     */
+    private func setFieldsEnabled(_ enabled: Bool) {
+        companyNameTextField?.isEditable = enabled
+        applicationDatePicker?.isEnabled = enabled
+        deadlineDatePicker?.isEnabled = enabled
+        statusPopUpButton?.isEnabled = enabled
+        jobDescriptionTextView?.isEditable = enabled
+        contactNameTextField?.isEditable = enabled
+        contactEmailTextField?.isEditable = enabled
+        contactPhoneTextField?.isEditable = enabled
+        saveButton?.isEnabled = enabled
+    }
+    
+    /**
+     * Displays the specified job application in the detail view.
+     *
+     * - Parameter jobApplication: The job application to display, or nil to clear the view
+     */
+    func display(jobApplication: JobApplication?) {
         currentJob = jobApplication
         
-        // Update UI with job data
-        companyNameTextField.stringValue = jobApplication.companyName
-        jobTitleTextField.stringValue = jobApplication.jobTitle
-        applicationDatePicker.dateValue = jobApplication.applicationDate
-        deadlineDatePicker.dateValue = jobApplication.applicationDeadline
-        
-        // Set status
-        let index = statusPopUpButton.indexOfItem(withTitle: jobApplication.status)
-        if index != -1 {
-            statusPopUpButton.selectItem(at: index)
+        if let job = jobApplication {
+            // App is selected, show its information
+            companyNameTextField.stringValue = job.companyName
+            applicationDatePicker.dateValue = job.applicationDate
+            deadlineDatePicker.dateValue = job.applicationDeadline
+            
+            // Set the status
+            if let statusIndex = statusPopUpButton.itemTitles.firstIndex(of: job.status) {
+                statusPopUpButton.selectItem(at: statusIndex)
+            } else {
+                statusPopUpButton.selectItem(at: 0) // Default to first item
+            }
+            
+            // Set text fields
+            jobDescriptionTextView.string = job.jobDescription
+            contactNameTextField.stringValue = job.contactName
+            contactEmailTextField.stringValue = job.contactEmail
+            contactPhoneTextField.stringValue = job.contactPhone
+            
+            // Keep fields disabled by default (unless edit mode is on)
+            setFieldsEnabled(isEditMode)
         } else {
-            statusPopUpButton.selectItem(at: 0) // Default to "Applied"
+            // No job selected, use default values
+            populateDefaultValues()
+            setFieldsEnabled(isEditMode)
         }
-        
-        // Set job description with default if empty
-        if jobApplication.jobDescription.isEmpty {
-            jobDescriptionTextView.string = "Enter the job description here. Include details about responsibilities, requirements, and any other relevant information about the position."
-        } else {
-            jobDescriptionTextView.string = jobApplication.jobDescription
-        }
-        
-        notesTextView.string = jobApplication.notes
-        contactNameTextField.stringValue = jobApplication.contactName
-        contactEmailTextField.stringValue = jobApplication.contactEmail
-        contactPhoneTextField.stringValue = jobApplication.contactPhone
-        
-        // Reload attachments
-        attachmentsTableView.reloadData()
     }
     
-    // MARK: - Actions
-    
-    @objc private func saveChanges(_ sender: NSButton) {
+    /**
+     * Saves the changes made to the job application.
+     */
+    @objc private func saveChanges() {
         guard var updatedJob = currentJob else { return }
         
+        // Update job with values from fields
         updatedJob.companyName = companyNameTextField.stringValue
-        updatedJob.jobTitle = jobTitleTextField.stringValue
         updatedJob.applicationDate = applicationDatePicker.dateValue
         updatedJob.applicationDeadline = deadlineDatePicker.dateValue
         updatedJob.status = statusPopUpButton.titleOfSelectedItem ?? "Applied"
         updatedJob.jobDescription = jobDescriptionTextView.string
-        updatedJob.notes = notesTextView.string
         updatedJob.contactName = contactNameTextField.stringValue
         updatedJob.contactEmail = contactEmailTextField.stringValue
         updatedJob.contactPhone = contactPhoneTextField.stringValue
         
+        // Notify delegate about the update
         delegate?.jobDetailViewDidUpdate(updatedJob)
-    }
-    
-    @objc private func addAttachment(_ sender: NSButton) {
-        guard let currentJob = currentJob else { return }
         
-        // Create an open panel
-        let openPanel = NSOpenPanel()
-        openPanel.title = "Select Document"
-        
-        // Use UTType for content types
-        var contentTypes: [UTType] = [
-            .pdf,
-            .plainText,
-            .rtf
-        ]
-        
-        // Add Microsoft Word document types
-        if let wordType = UTType(filenameExtension: "doc") {
-            contentTypes.append(wordType)
-        }
-        
-        if let docxType = UTType(filenameExtension: "docx") {
-            contentTypes.append(docxType)
-        }
-        
-        openPanel.allowedContentTypes = contentTypes
-        openPanel.allowsMultipleSelection = false
-        
-        openPanel.beginSheetModal(for: window!) { response in
-            if response == .OK, let url = openPanel.url {
-                do {
-                    // Copy the file to the application's documents directory
-                    let documentURL = try self.iCloudManager.copyFileToDocuments(url, forJobId: currentJob.id)
-                    
-                    // Create a new attachment
-                    let attachment = Attachment(
-                        id: -1, // Database will assign a proper ID
-                        jobId: currentJob.id,
-                        fileName: url.lastPathComponent,
-                        filePath: documentURL.path,
-                        dateAdded: Date()
-                    )
-                    
-                    // Save the attachment to the database
-                    let _ = try self.databaseManager.addAttachment(attachment)
-                    
-                    // Reload the job to get the updated attachments
-                    if let updatedJob = try self.databaseManager.getJobApplication(currentJob.id) {
-                        self.displayJobApplication(updatedJob)
-                    }
-                } catch {
-                    print("Failed to add attachment: \(error)")
-                    self.showAlert(title: "Error", message: "Failed to add attachment: \(error.localizedDescription)")
-                }
-            }
-        }
-    }
-    
-    @objc private func removeAttachment(_ sender: NSButton) {
-        guard let currentJob = currentJob else { return }
-        let selectedRow = attachmentsTableView.selectedRow
-        
-        guard selectedRow >= 0, selectedRow < currentJob.attachments.count else {
-            showAlert(title: "Error", message: "Please select an attachment to remove")
-            return
-        }
-        
-        let attachment = currentJob.attachments[selectedRow]
-        
-        let alert = NSAlert()
-        alert.messageText = "Remove Attachment"
-        alert.informativeText = "Are you sure you want to remove the attachment '\(attachment.fileName)'?"
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "Remove")
-        alert.addButton(withTitle: "Cancel")
-        
-        alert.beginSheetModal(for: window!) { response in
-            if response == .alertFirstButtonReturn {
-                do {
-                    // Delete the file from the documents directory
-                    try self.iCloudManager.deleteFile(at: URL(fileURLWithPath: attachment.filePath))
-                    
-                    // Delete the attachment from the database
-                    try self.databaseManager.deleteAttachment(attachment.id)
-                    
-                    // Reload the job to get the updated attachments
-                    if let updatedJob = try self.databaseManager.getJobApplication(currentJob.id) {
-                        self.displayJobApplication(updatedJob)
-                    }
-                } catch {
-                    print("Failed to remove attachment: \(error)")
-                    self.showAlert(title: "Error", message: "Failed to remove attachment: \(error.localizedDescription)")
-                }
-            }
-        }
-    }
-    
-    @objc private func openAttachment(_ sender: NSButton) {
-        guard let currentJob = currentJob else { return }
-        let selectedRow = attachmentsTableView.selectedRow
-        
-        guard selectedRow >= 0, selectedRow < currentJob.attachments.count else {
-            showAlert(title: "Error", message: "Please select an attachment to open")
-            return
-        }
-        
-        let attachment = currentJob.attachments[selectedRow]
-        let fileURL = URL(fileURLWithPath: attachment.filePath)
-        
-        NSWorkspace.shared.open(fileURL)
-    }
-    
-    // MARK: - Helpers
-    
-    private func showAlert(title: String, message: String) {
-        let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = message
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "OK")
-        
-        if let window = window {
-            alert.beginSheetModal(for: window, completionHandler: nil)
-        } else {
-            alert.runModal()
-        }
-    }
-}
-
-// MARK: - NSTableViewDelegate & NSTableViewDataSource
-
-extension JobDetailView: NSTableViewDelegate, NSTableViewDataSource {
-    func numberOfRows(in tableView: NSTableView) -> Int {
-        return currentJob?.attachments.count ?? 0
-    }
-    
-    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        guard let currentJob = currentJob, row < currentJob.attachments.count else { return nil }
-        
-        let attachment = currentJob.attachments[row]
-        let identifier = tableColumn?.identifier ?? NSUserInterfaceItemIdentifier("")
-        
-        if let cell = tableView.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView {
-            return cell
-        }
-        
-        let cell = NSTableCellView()
-        cell.identifier = identifier
-        
-        let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: tableColumn?.width ?? 0, height: 20))
-        textField.isEditable = false
-        textField.isBordered = false
-        textField.drawsBackground = false
-        cell.textField = textField
-        cell.addSubview(textField)
-        
-        if identifier.rawValue == "filenameColumn" {
-            textField.stringValue = attachment.fileName
-        } else if identifier.rawValue == "typeColumn" {
-            let fileExtension = URL(fileURLWithPath: attachment.fileName).pathExtension.uppercased()
-            textField.stringValue = fileExtension
-        }
-        
-        return cell
+        // Disable edit mode after saving
+        editModeCheckbox.state = .off
+        isEditMode = false
+        setFieldsEnabled(false)
     }
 } 

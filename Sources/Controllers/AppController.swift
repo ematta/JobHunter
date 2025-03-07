@@ -54,13 +54,15 @@ class AppController: NSObject {
     private func createMainWindow() {
         // Create the window
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700),
+            contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
         
         window?.title = "JobHunter"
+        window?.appearance = NSAppearance(named: .darkAqua)
+        window?.backgroundColor = NSColor.darkGray
         window?.center()
         
         // Create the main view controller

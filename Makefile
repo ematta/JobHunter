@@ -48,6 +48,13 @@ run: app
 	@echo "Running $(APP_NAME)..."
 	@open $(APP_DIR)
 
+# Kill all related processes
+.PHONY: kill
+kill:
+	@echo "Killing all $(APP_NAME) processes..."
+	@pkill -f "$(APP_NAME)" || echo "No $(APP_NAME) processes found."
+	@echo "Kill command completed."
+
 # Clean build artifacts
 .PHONY: clean
 clean:
@@ -65,5 +72,6 @@ help:
 	@echo "  test   - Run all tests"
 	@echo "  app    - Create the app bundle"
 	@echo "  run    - Create the app bundle and run the application"
+	@echo "  kill   - Kill all processes related to the application"
 	@echo "  clean  - Remove all build artifacts"
 	@echo "  help   - Display this help message" 

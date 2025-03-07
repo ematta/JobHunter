@@ -126,7 +126,7 @@ class NewJobViewController: NSViewController {
         jobDescriptionScrollView.hasVerticalScroller = true
         jobDescriptionScrollView.borderType = .bezelBorder
         
-        jobDescriptionTextView = NSTextView(frame: NSRect(x: 0, y: 0, width: jobDescriptionScrollView.contentSize.width, height: jobDescriptionScrollView.contentSize.height))
+        jobDescriptionTextView = NSTextView(frame: NSRect(x: 0, y: 0, width: jobDescriptionScrollView.contentSize.width - 120, height: jobDescriptionScrollView.contentSize.height))
         jobDescriptionTextView.font = NSFont.systemFont(ofSize: 13)
         jobDescriptionTextView.autoresizingMask = [.width, .height]
         jobDescriptionTextView.isEditable = true
