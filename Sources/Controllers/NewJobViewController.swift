@@ -195,6 +195,12 @@ class NewJobViewController: NSViewController {
         saveButton.keyEquivalent = "\r" // Return key
         saveButton.frame = NSRect(x: view.bounds.width - 100, y: 20, width: 80, height: 32)
         view.addSubview(saveButton)
+        
+        // Add debug button to reset database
+        let resetDatabaseButton = NSButton(title: "Reset Database", target: self, action: #selector(resetDatabaseButtonClicked(_:)))
+        resetDatabaseButton.bezelStyle = .rounded
+        resetDatabaseButton.frame = NSRect(x: 20, y: 20, width: 120, height: 32)
+        view.addSubview(resetDatabaseButton)
     }
     
     @objc private func cancelButtonClicked(_ sender: NSButton) {
@@ -231,12 +237,73 @@ class NewJobViewController: NSViewController {
         
         // Save the job application to the database
         do {
+            // Directly call addJobApplication instead of using transaction
+            print("Saving job application...")
             let _ = try databaseManager.addJobApplication(newJob)
+            print("Job application saved successfully")
             dismiss(nil)
             onJobAdded?()
+        } catch let dbError as DatabaseError {
+            print("Database error caught: \(dbError)")
+            
+            // Try alternative location if insertion failed
+            if case .insertFailed = dbError {
+                let alert = NSAlert()
+                alert.messageText = "Database Error"
+                alert.informativeText = "Failed to save to primary location. Would you like to try an alternative location?"
+                alert.alertStyle = .warning
+                alert.addButton(withTitle: "Try Alternative")
+                alert.addButton(withTitle: "Cancel")
+                
+                if alert.runModal() == .alertFirstButtonReturn {
+                    if databaseManager.tryAlternativeDatabaseLocation() {
+                        // Try saving again with the new database
+                        do {
+                            let _ = try databaseManager.addJobApplication(newJob)
+                            print("Job application saved successfully to alternative location")
+                            dismiss(nil)
+                            onJobAdded?()
+                        } catch {
+                            print("Failed to save to alternative location: \(error)")
+                            showAlert(title: "Database Error", message: "Failed to save job application: \(error.localizedDescription)")
+                        }
+                    } else {
+                        showAlert(title: "Database Error", message: "Could not create alternative database location")
+                    }
+                    return
+                }
+            }
+            
+            switch dbError {
+            case .insertFailed(let message):
+                print("Database insert failed: \(message)")
+                showAlert(title: "Database Error", message: "Failed to save job application: \(message)")
+            default:
+                print("Database error: \(dbError)")
+                showAlert(title: "Database Error", message: "Failed to save job application: \(dbError)")
+            }
         } catch {
             print("Failed to add job application: \(error)")
             showAlert(title: "Error", message: "Failed to add job application: \(error.localizedDescription)")
+        }
+    }
+    
+    @objc private func resetDatabaseButtonClicked(_ sender: NSButton) {
+        let alert = NSAlert()
+        alert.messageText = "Reset Database"
+        alert.informativeText = "This will delete all data in the database. Are you sure you want to continue?"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Reset Database")
+        alert.addButton(withTitle: "Cancel")
+        
+        if alert.runModal() == .alertFirstButtonReturn {
+            do {
+                try databaseManager.resetDatabase()
+                showAlert(title: "Database Reset", message: "Database has been reset successfully. Please try saving again.")
+            } catch {
+                print("Failed to reset database: \(error)")
+                showAlert(title: "Reset Failed", message: "Failed to reset database: \(error.localizedDescription)")
+            }
         }
     }
     
@@ -246,6 +313,32 @@ class NewJobViewController: NSViewController {
         alert.informativeText = message
         alert.alertStyle = .warning
         alert.addButton(withTitle: "OK")
-        alert.runModal()
+        
+        // Add option to reset database if it's a database error
+        if title.contains("Database Error") {
+            alert.addButton(withTitle: "Reset Database")
+        }
+        
+        let response = alert.runModal()
+        
+        // Handle reset database option
+        if response == .alertSecondButtonReturn && title.contains("Database Error") {
+            let confirmAlert = NSAlert()
+            confirmAlert.messageText = "Reset Database"
+            confirmAlert.informativeText = "This will delete all data in the database. Are you sure you want to continue?"
+            confirmAlert.alertStyle = .warning
+            confirmAlert.addButton(withTitle: "Reset Database")
+            confirmAlert.addButton(withTitle: "Cancel")
+            
+            if confirmAlert.runModal() == .alertFirstButtonReturn {
+                do {
+                    try databaseManager.resetDatabase()
+                    showAlert(title: "Database Reset", message: "Database has been reset successfully. Please try saving again.")
+                } catch {
+                    print("Failed to reset database: \(error)")
+                    showAlert(title: "Reset Failed", message: "Failed to reset database: \(error.localizedDescription)")
+                }
+            }
+        }
     }
 } 
