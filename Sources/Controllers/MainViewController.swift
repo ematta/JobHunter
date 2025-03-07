@@ -1,15 +1,37 @@
 import AppKit
 import Foundation
 
+/**
+ * MainViewController is responsible for managing the main interface of the JobHunter application.
+ * It handles the display and interaction with job applications, including:
+ * - Displaying a list of job applications in a table view
+ * - Showing detailed information about selected jobs
+ * - Filtering jobs by status and search terms
+ * - Managing job application CRUD operations
+ */
 class MainViewController: NSViewController {
+    /// The database manager instance used for persistent storage operations
     private let databaseManager: DatabaseManager
+    
+    /// The iCloud manager instance used for cloud synchronization
     private let iCloudManager: iCloudManager
     
+    /// The table view displaying the list of job applications
     private var jobsTableView: NSTableView!
+    
+    /// The view displaying detailed information about the selected job
     private var jobDetailView: JobDetailView!
+    
+    /// The search field for filtering job applications
     private var searchField: NSSearchField!
+    
+    /// The segmented control for filtering jobs by status
     private var statusSegmentedControl: NSSegmentedControl!
+    
+    /// The complete list of job applications
     private var jobApplications: [JobApplication] = []
+    
+    /// The filtered list of job applications based on search and status filters
     private var filteredJobApplications: [JobApplication] = []
     
     /**
@@ -82,7 +104,7 @@ class MainViewController: NSViewController {
         splitView.setPosition(300, ofDividerAt: 0)
         
         // Prevent the left panel from resizing
-        if let leftSplitViewItem = splitView.subviews.first {
+        if splitView.subviews.first != nil {
             splitView.setHoldingPriority(NSLayoutConstraint.Priority(250), forSubviewAt: 0)
         }
     }

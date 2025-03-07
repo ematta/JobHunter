@@ -95,11 +95,19 @@ class MainViewControllerUITests: XCTestCase {
             throw XCTSkip("Failed to initialize XCUIApplication")
         }
         
-        // Attempt to launch the app - this will fail if we're not in a proper UI test environment
-        do {
-            application.launch()
-        } catch {
-            throw XCTSkip("Failed to launch application: \(error)")
-        }
+        // Launch the app
+        application.launch()
+    }
+    
+    func testStatusFiltering() throws {
+        try skipTestIfRunningInSPM()
+        
+        // Test status filtering
+        let statusFilter = app!.segmentedControls["statusFilter"]
+        statusFilter.buttons["Applied"].tap()
+        
+        // Verify filtered results
+        let jobsTable = app!.tables["jobsTableView"]
+        XCTAssertTrue(jobsTable.cells.count > 0)
     }
 } 
