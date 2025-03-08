@@ -6,7 +6,7 @@ import Foundation
  * This struct models a file attachment that can be added to a job application,
  * such as resumes, cover letters, or other relevant documents.
  */
-struct Attachment {
+struct Attachment: Identifiable, Codable, Hashable {
     var id: Int
     var jobId: Int
     var fileName: String

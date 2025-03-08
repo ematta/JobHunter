@@ -6,7 +6,7 @@ import Foundation
  * This struct contains all information related to a job application, including
  * company details, application dates, status, and contact information.
  */
-struct JobApplication {
+struct JobApplication: Identifiable, Hashable {
     var id: Int
     var companyName: String
     var jobTitle: String
@@ -18,6 +18,7 @@ struct JobApplication {
     var contactName: String
     var contactEmail: String
     var contactPhone: String
+    var url: String
     var attachments: [Attachment]
     
     /**
@@ -35,9 +36,10 @@ struct JobApplication {
      *   - contactName: The name of the contact person at the company
      *   - contactEmail: The email address of the contact person
      *   - contactPhone: The phone number of the contact person
+     *   - url: The URL of the job posting
      *   - attachments: An array of attachments associated with this application
      */
-    init(id: Int, companyName: String, jobTitle: String, applicationDate: Date, applicationDeadline: Date, status: String, jobDescription: String, notes: String, contactName: String, contactEmail: String, contactPhone: String, attachments: [Attachment]) {
+    init(id: Int, companyName: String, jobTitle: String, applicationDate: Date, applicationDeadline: Date, status: String, jobDescription: String, notes: String, contactName: String, contactEmail: String, contactPhone: String, url: String = "", attachments: [Attachment]) {
         self.id = id
         self.companyName = companyName
         self.jobTitle = jobTitle
@@ -49,6 +51,27 @@ struct JobApplication {
         self.contactName = contactName
         self.contactEmail = contactEmail
         self.contactPhone = contactPhone
+        self.url = url
         self.attachments = attachments
+    }
+    
+    // MARK: - Hashable
+    
+    /**
+     * Hashes the essential components of the job application.
+     *
+     * Uses the id for hashing as it's the unique identifier.
+     */
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+    
+    /**
+     * Compares two job applications for equality.
+     *
+     * Two job applications are considered equal if they have the same id.
+     */
+    static func == (lhs: JobApplication, rhs: JobApplication) -> Bool {
+        return lhs.id == rhs.id
     }
 } 

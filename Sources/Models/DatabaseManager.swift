@@ -26,6 +26,7 @@ class DatabaseManager {
     private let contactName = Expression<String>(value: "contact_name")
     private let contactEmail = Expression<String>(value: "contact_email")
     private let contactPhone = Expression<String>(value: "contact_phone")
+    private let url = Expression<String>(value: "url")
     
     // Attachments columns
     private let attachmentId = Expression<Int64>(value: "id")
@@ -173,12 +174,34 @@ class DatabaseManager {
             notes TEXT,
             contact_name TEXT,
             contact_email TEXT,
-            contact_phone TEXT
+            contact_phone TEXT,
+            url TEXT
         )
         """
         
         print("Creating jobs table with SQL: \(createJobsTableSQL)")
         try db.execute(createJobsTableSQL)
+        
+        // Check if url column exists, if not add it
+        do {
+            let columnQuery = "PRAGMA table_info(jobs)"
+            let columns = try db.prepare(columnQuery)
+            var hasUrlColumn = false
+            
+            for column in columns {
+                if let name = column[1] as? String, name == "url" {
+                    hasUrlColumn = true
+                    break
+                }
+            }
+            
+            if !hasUrlColumn {
+                print("Adding url column to jobs table")
+                try db.execute("ALTER TABLE jobs ADD COLUMN url TEXT")
+            }
+        } catch {
+            print("Error checking for url column: \(error)")
+        }
         
         // Create attachments table using direct SQL
         let createAttachmentsTableSQL = """
@@ -215,7 +238,62 @@ class DatabaseManager {
      * - Returns: A Date object, or the current date if parsing fails
      */
     private func stringToDate(_ string: String) -> Date {
-        return dateFormatter.date(from: string) ?? Date()
+        // Early exit for empty strings
+        if string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return Date()
+        }
+        
+        // Try the primary date format first
+        if let date = dateFormatter.date(from: string) {
+            return date
+        }
+        
+        // Try alternate date formats if the primary format fails
+        let alternateFormatters = [
+            "yyyy-MM-dd",
+            "MM/dd/yyyy",
+            "dd/MM/yyyy",
+            "yyyy/MM/dd"
+        ]
+        
+        for format in alternateFormatters {
+            let formatter = DateFormatter()
+            formatter.dateFormat = format
+            if let date = formatter.date(from: string) {
+                return date
+            }
+        }
+        
+        // Default to current date if all parsing attempts fail
+        print("Warning: Failed to parse date string: \(string). Using current date instead.")
+        return Date()
+    }
+    
+    /**
+     * Sanitizes a string for safe database storage.
+     *
+     * Removes potentially problematic characters, trims whitespace,
+     * and ensures the string doesn't exceed the maximum length.
+     *
+     * - Parameters:
+     *   - string: The input string to sanitize
+     *   - maxLength: The maximum allowed length (default: 255)
+     * - Returns: The sanitized string
+     */
+    private func sanitizeString(_ string: String, maxLength: Int = 255) -> String {
+        // Trim whitespace
+        var sanitized = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Remove or replace potentially problematic characters
+        sanitized = sanitized.replacingOccurrences(of: "'", with: "''") // Escape single quotes for SQL
+        
+        // Truncate if longer than maxLength
+        if sanitized.count > maxLength {
+            let endIndex = sanitized.index(sanitized.startIndex, offsetBy: maxLength)
+            sanitized = String(sanitized[..<endIndex])
+        }
+        
+        return sanitized
     }
     
     // MARK: - Job Application Methods
@@ -232,69 +310,80 @@ class DatabaseManager {
             throw DatabaseError.databaseNotInitialized
         }
         
+        // Validate job application data before proceeding
+        try validateJobApplication(jobApplication)
+        
         print("Database path: \(db.description)")
         
         // Use transaction for atomicity
         var insertedId = -1
         
         try transaction {
-            // Verify database and table
-            let tableCheck = "SELECT name FROM sqlite_master WHERE type='table' AND name='jobs'"
-            let tableExists = try db.scalar(tableCheck) as? String != nil
-            print("Jobs table exists: \(tableExists)")
-            
-            if !tableExists {
-                print("Jobs table doesn't exist. Attempting to create it...")
-                try createTables()
+            // Use performDatabaseOperation for better error handling
+            insertedId = try performDatabaseOperation(operation: "add job application") {
+                // Verify database and table
+                let tableCheck = "SELECT name FROM sqlite_master WHERE type='table' AND name='jobs'"
+                let tableExists = try db.scalar(tableCheck) as? String != nil
+                print("Jobs table exists: \(tableExists)")
+                
+                if !tableExists {
+                    print("Jobs table doesn't exist. Attempting to create it...")
+                    try createTables()
+                }
+                
+                // Print schema info
+                print("Checking table schema...")
+                let schemaQuery = "PRAGMA table_info(jobs)"
+                let schemaRows = try db.prepare(schemaQuery)
+                for row in schemaRows {
+                    if let colName = row[1] as? String, let colType = row[2] as? String {
+                        print("Column: \(colName) (type: \(colType), notNull: \((row[3] as? Int64 ?? 0) == 1))")
+                    }
+                }
+                
+                // Format date values
+                let appDateStr = dateToString(jobApplication.applicationDate)
+                let deadlineDateStr = dateToString(jobApplication.applicationDeadline)
+                
+                // Use very simple approach to insert data
+                print("Creating insert statement...")
+                let insertSQL = """
+                INSERT INTO jobs (company_name, job_title, application_date, application_deadline, status, 
+                                  job_description, notes, contact_name, contact_email, contact_phone, url)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """
+                
+                print("Binding parameters...")
+                let statement = try db.prepare(insertSQL)
+                
+                // Execute with careful error handling
+                print("Executing insert with parameters:")
+                print("- Company: \(jobApplication.companyName)")
+                print("- Title: \(jobApplication.jobTitle)")
+                print("- App Date: \(appDateStr)")
+                print("- Deadline: \(deadlineDateStr)")
+                print("- Status: \(jobApplication.status)")
+                print("- URL: \(jobApplication.url)")
+                
+                try statement.run(
+                    sanitizeString(jobApplication.companyName.isEmpty ? "" : jobApplication.companyName),
+                    sanitizeString(jobApplication.jobTitle.isEmpty ? "" : jobApplication.jobTitle),
+                    appDateStr,
+                    deadlineDateStr,
+                    sanitizeString(jobApplication.status.isEmpty ? "Applied" : jobApplication.status),
+                    sanitizeString(jobApplication.jobDescription.isEmpty ? "" : jobApplication.jobDescription, maxLength: 2000),
+                    sanitizeString(jobApplication.notes.isEmpty ? "" : jobApplication.notes, maxLength: 2000),
+                    sanitizeString(jobApplication.contactName.isEmpty ? "" : jobApplication.contactName),
+                    sanitizeString(jobApplication.contactEmail.isEmpty ? "" : jobApplication.contactEmail),
+                    sanitizeString(jobApplication.contactPhone.isEmpty ? "" : jobApplication.contactPhone),
+                    sanitizeString(jobApplication.url.isEmpty ? "" : jobApplication.url)
+                )
+                
+                // Get inserted ID
+                let newId = Int(db.lastInsertRowid)
+                print("Insert successful! New job ID: \(newId)")
+                return newId
             }
-            
-            // Print schema info
-            print("Checking table schema...")
-            let schemaQuery = "PRAGMA table_info(jobs)"
-            let schemaRows = try db.prepare(schemaQuery)
-            for row in schemaRows {
-                print("Column: \(row[1] as! String) (type: \(row[2] as! String), notNull: \((row[3] as! Int64) == 1))")
-            }
-            
-            // Format date values
-            let appDateStr = dateToString(jobApplication.applicationDate)
-            let deadlineDateStr = dateToString(jobApplication.applicationDeadline)
-            
-            // Use very simple approach to insert data
-            print("Creating insert statement...")
-            let insertSQL = """
-            INSERT INTO jobs (company_name, job_title, application_date, application_deadline, status, 
-                              job_description, notes, contact_name, contact_email, contact_phone)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """
-            
-            print("Binding parameters...")
-            let statement = try db.prepare(insertSQL)
-            
-            // Execute with careful error handling
-            print("Executing insert with parameters:")
-            print("- Company: \(jobApplication.companyName)")
-            print("- Title: \(jobApplication.jobTitle)")
-            print("- App Date: \(appDateStr)")
-            print("- Deadline: \(deadlineDateStr)")
-            print("- Status: \(jobApplication.status)")
-            
-            try statement.run(
-                jobApplication.companyName.isEmpty ? "" : jobApplication.companyName,
-                jobApplication.jobTitle.isEmpty ? "" : jobApplication.jobTitle,
-                appDateStr,
-                deadlineDateStr,
-                jobApplication.status.isEmpty ? "Applied" : jobApplication.status,
-                jobApplication.jobDescription.isEmpty ? "" : jobApplication.jobDescription,
-                jobApplication.notes.isEmpty ? "" : jobApplication.notes,
-                jobApplication.contactName.isEmpty ? "" : jobApplication.contactName,
-                jobApplication.contactEmail.isEmpty ? "" : jobApplication.contactEmail,
-                jobApplication.contactPhone.isEmpty ? "" : jobApplication.contactPhone
-            )
-            
-            // Get inserted ID
-            insertedId = Int(db.lastInsertRowid)
-            print("Insert successful! New job ID: \(insertedId)")
         }
         
         return insertedId
@@ -311,21 +400,38 @@ class DatabaseManager {
             throw DatabaseError.databaseNotInitialized
         }
         
+        // Validate job application data before proceeding
+        try validateJobApplication(jobApplication)
+        
         // Use a raw SQL query instead of the filter method
-        let sql = "UPDATE jobs SET company_name = ?, job_title = ?, application_date = ?, application_deadline = ?, status = ?, job_description = ?, notes = ?, contact_name = ?, contact_email = ?, contact_phone = ? WHERE id = ?"
+        let sql = "UPDATE jobs SET company_name = ?, job_title = ?, application_date = ?, application_deadline = ?, status = ?, job_description = ?, notes = ?, contact_name = ?, contact_email = ?, contact_phone = ?, url = ? WHERE id = ?"
+        
+        // Prepare values with additional safety checks
+        let companyNameValue = sanitizeString(jobApplication.companyName.isEmpty ? "" : jobApplication.companyName)
+        let jobTitleValue = sanitizeString(jobApplication.jobTitle.isEmpty ? "" : jobApplication.jobTitle)
+        let appDateValue = dateToString(jobApplication.applicationDate)
+        let deadlineValue = dateToString(jobApplication.applicationDeadline)
+        let statusValue = sanitizeString(jobApplication.status.isEmpty ? "Applied" : jobApplication.status)
+        let jobDescriptionValue = sanitizeString(jobApplication.jobDescription.isEmpty ? "" : jobApplication.jobDescription, maxLength: 2000)
+        let notesValue = sanitizeString(jobApplication.notes.isEmpty ? "" : jobApplication.notes, maxLength: 2000)
+        let contactNameValue = sanitizeString(jobApplication.contactName.isEmpty ? "" : jobApplication.contactName)
+        let contactEmailValue = sanitizeString(jobApplication.contactEmail.isEmpty ? "" : jobApplication.contactEmail)
+        let contactPhoneValue = sanitizeString(jobApplication.contactPhone.isEmpty ? "" : jobApplication.contactPhone)
+        let urlValue = sanitizeString(jobApplication.url.isEmpty ? "" : jobApplication.url)
         
         let stmt = try db.prepare(sql)
         try stmt.run(
-            jobApplication.companyName,
-            jobApplication.jobTitle,
-            dateToString(jobApplication.applicationDate),
-            dateToString(jobApplication.applicationDeadline),
-            jobApplication.status,
-            jobApplication.jobDescription,
-            jobApplication.notes,
-            jobApplication.contactName,
-            jobApplication.contactEmail,
-            jobApplication.contactPhone,
+            companyNameValue,
+            jobTitleValue,
+            appDateValue,
+            deadlineValue,
+            statusValue,
+            jobDescriptionValue,
+            notesValue,
+            contactNameValue,
+            contactEmailValue,
+            contactPhoneValue,
+            urlValue,
             jobApplication.id
         )
         
@@ -373,17 +479,18 @@ class DatabaseManager {
             let attachments = try getAttachmentsForJob(jobId)
             
             return JobApplication(
-                id: Int(row[0] as! Int64),
-                companyName: row[1] as! String,
-                jobTitle: row[2] as! String,
-                applicationDate: stringToDate(row[3] as! String),
-                applicationDeadline: stringToDate(row[4] as! String),
-                status: row[5] as! String,
-                jobDescription: row[6] as! String,
-                notes: row[7] as! String,
-                contactName: row[8] as! String,
-                contactEmail: row[9] as! String,
-                contactPhone: row[10] as! String,
+                id: Int(row[0] as? Int64 ?? 0),
+                companyName: row[1] as? String ?? "",
+                jobTitle: row[2] as? String ?? "",
+                applicationDate: stringToDate(row[3] as? String ?? ""),
+                applicationDeadline: stringToDate(row[4] as? String ?? ""),
+                status: row[5] as? String ?? "",
+                jobDescription: row[6] as? String ?? "",
+                notes: row[7] as? String ?? "",
+                contactName: row[8] as? String ?? "",
+                contactEmail: row[9] as? String ?? "",
+                contactPhone: row[10] as? String ?? "",
+                url: row[11] as? String ?? "",
                 attachments: attachments
             )
         }
@@ -410,21 +517,22 @@ class DatabaseManager {
         let stmt = try db.prepare(sql)
         
         for row in try stmt.run() {
-            let jobId = Int(row[0] as! Int64)
+            let jobId = Int(row[0] as? Int64 ?? 0)
             let attachments = try getAttachmentsForJob(jobId)
             
             let jobApplication = JobApplication(
                 id: jobId,
-                companyName: row[1] as! String,
-                jobTitle: row[2] as! String,
-                applicationDate: stringToDate(row[3] as! String),
-                applicationDeadline: stringToDate(row[4] as! String),
-                status: row[5] as! String,
-                jobDescription: row[6] as! String,
-                notes: row[7] as! String,
-                contactName: row[8] as! String,
-                contactEmail: row[9] as! String,
-                contactPhone: row[10] as! String,
+                companyName: row[1] as? String ?? "",
+                jobTitle: row[2] as? String ?? "",
+                applicationDate: stringToDate(row[3] as? String ?? ""),
+                applicationDeadline: stringToDate(row[4] as? String ?? ""),
+                status: row[5] as? String ?? "",
+                jobDescription: row[6] as? String ?? "",
+                notes: row[7] as? String ?? "",
+                contactName: row[8] as? String ?? "",
+                contactEmail: row[9] as? String ?? "",
+                contactPhone: row[10] as? String ?? "",
+                url: row[11] as? String ?? "",
                 attachments: attachments
             )
             
@@ -503,11 +611,11 @@ class DatabaseManager {
         
         for row in try stmt.run(jobId) {
             let attachment = Attachment(
-                id: Int(row[0] as! Int64),
-                jobId: Int(row[1] as! Int64),
-                fileName: row[2] as! String,
-                filePath: row[3] as! String,
-                dateAdded: stringToDate(row[4] as! String)
+                id: Int(row[0] as? Int64 ?? 0),
+                jobId: Int(row[1] as? Int64 ?? 0),
+                fileName: row[2] as? String ?? "",
+                filePath: row[3] as? String ?? "",
+                dateAdded: stringToDate(row[4] as? String ?? "")
             )
             
             attachments.append(attachment)
@@ -627,7 +735,7 @@ class DatabaseManager {
             
             // Verify by adding a test record and then deleting it
             print("Verifying database with test write operation...")
-            let insertSQL = "INSERT INTO jobs (company_name, job_title, application_date, application_deadline, status, job_description, notes, contact_name, contact_email, contact_phone) VALUES ('Test Company', 'Test Job', '2023-01-01T12:00:00', '2023-01-01T12:00:00', 'Test', '', '', '', '', '')"
+            let insertSQL = "INSERT INTO jobs (company_name, job_title, application_date, application_deadline, status, job_description, notes, contact_name, contact_email, contact_phone, url) VALUES ('Test Company', 'Test Job', '2023-01-01T12:00:00', '2023-01-01T12:00:00', 'Test', '', '', '', '', '', '')"
             
             guard let db = db else { return false }
             
@@ -666,6 +774,95 @@ class DatabaseManager {
             }
         }
     }
+    
+    /**
+     * Validates a job application's data for integrity.
+     *
+     * - Parameter jobApplication: The job application to validate
+     * - Throws: ValidationError if any required field is invalid
+     */
+    private func validateJobApplication(_ jobApplication: JobApplication) throws {
+        // Validate required fields
+        guard !jobApplication.companyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw ValidationError.missingRequiredField("Company Name")
+        }
+        
+        guard !jobApplication.jobTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw ValidationError.missingRequiredField("Job Title")
+        }
+        
+        // Ensure dates are valid (not in the far past or future)
+        let calendar = Calendar.current
+        let currentYear = calendar.component(.year, from: Date())
+        
+        // Application date should be within a reasonable range
+        let appDateYear = calendar.component(.year, from: jobApplication.applicationDate)
+        guard appDateYear >= (currentYear - 5) && appDateYear <= (currentYear + 1) else {
+            throw ValidationError.invalidDateRange("Application Date")
+        }
+        
+        // Validate email format if provided
+        if !jobApplication.contactEmail.isEmpty {
+            let emailRegex = "[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,64}"
+            let emailPredicate = NSPredicate(format: "SELF MATCHES %@", emailRegex)
+            guard emailPredicate.evaluate(with: jobApplication.contactEmail) else {
+                throw ValidationError.invalidFormat("Contact Email")
+            }
+        }
+        
+        // Validate URL format if provided
+        if !jobApplication.url.isEmpty {
+            guard URL(string: jobApplication.url) != nil else {
+                throw ValidationError.invalidFormat("URL")
+            }
+        }
+        
+        // Validate phone number format if provided
+        if !jobApplication.contactPhone.isEmpty {
+            let phoneRegex = "^[+]?[(]?[0-9]{1,4}[)]?[-\\s\\./0-9]*$"
+            let phonePredicate = NSPredicate(format: "SELF MATCHES %@", phoneRegex)
+            guard phonePredicate.evaluate(with: jobApplication.contactPhone) else {
+                throw ValidationError.invalidFormat("Contact Phone")
+            }
+        }
+    }
+    
+    /**
+     * Performs a database operation with robust error handling and logging.
+     *
+     * - Parameters:
+     *   - operation: The operation name for logging purposes
+     *   - action: The closure containing the database operation to perform
+     * - Throws: Rethrows any errors from the database operation with additional context
+     * - Returns: The result of the database operation
+     */
+    private func performDatabaseOperation<T>(operation: String, action: () throws -> T) throws -> T {
+        do {
+            return try action()
+        } catch {
+            // Log the error
+            print("Error during database operation '\(operation)': \(error.localizedDescription)")
+            
+            // Convert to appropriate domain error
+            if error.localizedDescription.contains("constraint") {
+                throw DatabaseError.insertFailed(message: "Constraint violation: \(error.localizedDescription)")
+            } else if error.localizedDescription.contains("readonly") {
+                throw DatabaseError.updateFailed
+            } else if error.localizedDescription.contains("no such table") {
+                // Try to recover by recreating tables
+                do {
+                    try createTables()
+                    // Try the operation once more
+                    return try action()
+                } catch {
+                    throw DatabaseError.insertFailed(message: "Table creation failed: \(error.localizedDescription)")
+                }
+            } else {
+                // Propagate the error with more context
+                throw DatabaseError.insertFailed(message: "Database operation failed: \(error.localizedDescription)")
+            }
+        }
+    }
 }
 
 /**
@@ -680,4 +877,18 @@ enum DatabaseError: Error {
     case deleteFailed
     /// An insert operation failed
     case insertFailed(message: String)
+}
+
+/**
+ * Errors that can occur during data validation.
+ */
+enum ValidationError: Error {
+    /// A required field is missing or empty
+    case missingRequiredField(_ fieldName: String)
+    /// A field has an invalid format
+    case invalidFormat(_ fieldName: String)
+    /// A date is outside the valid range
+    case invalidDateRange(_ fieldName: String)
+    /// A field exceeds the maximum allowed length
+    case fieldTooLong(_ fieldName: String, maxLength: Int)
 } 

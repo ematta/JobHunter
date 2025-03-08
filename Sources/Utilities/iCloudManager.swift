@@ -6,7 +6,7 @@ import Foundation
  * This class provides functionality to store and retrieve files using iCloud storage,
  * with local fallback when iCloud is not available.
  */
-class iCloudManager {
+class CloudManager: ObservableObject {
     private let fileManager = FileManager.default
     private let ubiquityContainerIdentifier: String? = nil // Default iCloud container
     
