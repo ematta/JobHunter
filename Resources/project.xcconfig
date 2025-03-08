@@ -1,0 +1,28 @@
+// Xcode configuration for JobHunter project
+
+// Bundle identifier
+PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.JobHunter
+
+// App display name
+PRODUCT_NAME = JobHunter
+
+// Deployment target
+MACOSX_DEPLOYMENT_TARGET = 12.0
+
+// Code signing
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = Mac Developer
+DEVELOPMENT_TEAM = YOUR_TEAM_ID // Replace with your Apple Developer Team ID
+
+// Enable iCloud
+ENABLE_ICLOUD = YES
+ENABLE_ICLOUD_DOCUMENTS = YES
+
+// Build settings
+SWIFT_VERSION = 6.0
+ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES
+COPY_PHASE_STRIP = NO
+ENABLE_BITCODE = NO
+
+// Linking
+OTHER_LDFLAGS = -ObjC -all_load 

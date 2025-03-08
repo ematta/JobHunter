@@ -1,0 +1,77 @@
+name: CI/CD Pipeline
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: 6.0.2
+      
+      - name: Run tests
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          swift test --package-path .
+
+  build:
+    needs: test
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: 6.0.2
+          
+      - name: Build application
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          swift build --package-path .
+
+      - name: Create app bundle
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          make app
+
+      - name: Archive app
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          zip -r JobHunter.zip JobHunter.app
+          
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: JobHunter-app
+          path: JobHunter.zip
+
+  release:
+    needs: build
+    runs-on: macos-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: JobHunter-app
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: JobHunter.zip
+          name: JobHunter v${{ steps.get_version.outputs.VERSION }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
